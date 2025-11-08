@@ -2,8 +2,8 @@
 
 基于Golang和Gin框架的AI驱动自主渗透测试平台，使用MCP（Model Context Protocol）协议集成安全工具，实现智能化的安全测试和漏洞发现。
 
-## 
-  ![详情预览](./image/效果1.png)
+## 效果
+  ![详情预览](./img/效果1.png)
 
 ## ✨ 功能特性
 
