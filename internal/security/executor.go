@@ -520,7 +520,14 @@ func (e *Executor) formatParamValue(param config.ParameterConfig, value interfac
 		}
 		return fmt.Sprintf("%v", value)
 	default:
-		return fmt.Sprintf("%v", value)
+		formattedValue := fmt.Sprintf("%v", value)
+		// 特殊处理：对于 ports 参数（通常是 nmap 等工具的端口参数），清理空格
+		// nmap 不接受端口列表中有空格，例如 "80,443, 22" 应该变成 "80,443,22"
+		if param.Name == "ports" {
+			// 移除所有空格，但保留逗号和其他字符
+			formattedValue = strings.ReplaceAll(formattedValue, " ", "")
+		}
+		return formattedValue
 	}
 }
 
