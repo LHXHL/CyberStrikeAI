@@ -233,7 +233,8 @@ func (e *Executor) buildCommandArgs(toolName string, toolConfig *config.ToolConf
 		// 处理标志参数
 		for _, param := range flagParams {
 			// 跳过特殊参数，它们会在后面单独处理
-			if param.Name == "additional_args" || param.Name == "scan_type" {
+			// action 参数仅用于工具内部逻辑，不传递给命令
+			if param.Name == "additional_args" || param.Name == "scan_type" || param.Name == "action" {
 				continue
 			}
 			
@@ -335,7 +336,8 @@ func (e *Executor) buildCommandArgs(toolName string, toolConfig *config.ToolConf
 		for i := 0; i < len(positionalParams); i++ {
 			for _, param := range positionalParams {
 				// 跳过特殊参数，它们会在后面单独处理
-				if param.Name == "additional_args" || param.Name == "scan_type" {
+				// action 参数仅用于工具内部逻辑，不传递给命令
+				if param.Name == "additional_args" || param.Name == "scan_type" || param.Name == "action" {
 					continue
 				}
 				
