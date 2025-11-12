@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"cyberstrike-ai/internal/config"
@@ -23,6 +24,7 @@ type Agent struct {
 	mcpServer     *mcp.Server
 	logger        *zap.Logger
 	maxIterations int
+	mu            sync.RWMutex // 添加互斥锁以支持并发更新
 }
 
 // NewAgent 创建新的Agent
@@ -936,6 +938,27 @@ func (a *Agent) executeToolViaMCP(ctx context.Context, toolName string, args map
 		ExecutionID: executionID,
 		IsError:     result != nil && result.IsError,
 	}, nil
+}
+
+// UpdateConfig 更新OpenAI配置
+func (a *Agent) UpdateConfig(cfg *config.OpenAIConfig) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.config = cfg
+	a.logger.Info("Agent配置已更新",
+		zap.String("base_url", cfg.BaseURL),
+		zap.String("model", cfg.Model),
+	)
+}
+
+// UpdateMaxIterations 更新最大迭代次数
+func (a *Agent) UpdateMaxIterations(maxIterations int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if maxIterations > 0 {
+		a.maxIterations = maxIterations
+		a.logger.Info("Agent最大迭代次数已更新", zap.Int("max_iterations", maxIterations))
+	}
 }
 
 // formatToolError 格式化工具错误信息，提供更友好的错误描述

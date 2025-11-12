@@ -36,9 +36,9 @@ type MCPConfig struct {
 }
 
 type OpenAIConfig struct {
-	APIKey  string `yaml:"api_key"`
-	BaseURL string `yaml:"base_url"`
-	Model   string `yaml:"model"`
+	APIKey  string `yaml:"api_key" json:"api_key"`
+	BaseURL string `yaml:"base_url" json:"base_url"`
+	Model   string `yaml:"model" json:"model"`
 }
 
 type SecurityConfig struct {
@@ -51,7 +51,7 @@ type DatabaseConfig struct {
 }
 
 type AgentConfig struct {
-	MaxIterations int `yaml:"max_iterations"`
+	MaxIterations int `yaml:"max_iterations" json:"max_iterations"`
 }
 
 type ToolConfig struct {

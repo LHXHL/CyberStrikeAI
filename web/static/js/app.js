@@ -1002,13 +1002,6 @@ function closeMCPDetail() {
     document.getElementById('mcp-detail-modal').style.display = 'none';
 }
 
-// 点击模态框外部关闭
-window.onclick = function(event) {
-    const modal = document.getElementById('mcp-detail-modal');
-    if (event.target == modal) {
-        closeMCPDetail();
-    }
-}
 
 // 工具函数
 function getStatusText(status) {
@@ -1350,6 +1343,211 @@ async function cancelActiveTask(conversationId, button) {
         alert('取消任务失败: ' + error.message);
         button.disabled = false;
         button.textContent = originalText;
+    }
+}
+
+// 设置相关功能
+let currentConfig = null;
+let allTools = [];
+
+// 打开设置
+async function openSettings() {
+    const modal = document.getElementById('settings-modal');
+    modal.style.display = 'block';
+    
+    // 每次打开时重新加载最新配置
+    await loadConfig();
+    
+    // 清除之前的验证错误状态
+    document.querySelectorAll('.form-group input').forEach(input => {
+        input.classList.remove('error');
+    });
+}
+
+// 关闭设置
+function closeSettings() {
+    const modal = document.getElementById('settings-modal');
+    modal.style.display = 'none';
+}
+
+// 点击模态框外部关闭
+window.onclick = function(event) {
+    const settingsModal = document.getElementById('settings-modal');
+    const mcpModal = document.getElementById('mcp-detail-modal');
+    
+    if (event.target == settingsModal) {
+        closeSettings();
+    }
+    if (event.target == mcpModal) {
+        closeMCPDetail();
+    }
+}
+
+// 加载配置
+async function loadConfig() {
+    try {
+        const response = await fetch('/api/config');
+        if (!response.ok) {
+            throw new Error('获取配置失败');
+        }
+        
+        currentConfig = await response.json();
+        
+        // 填充OpenAI配置
+        document.getElementById('openai-api-key').value = currentConfig.openai.api_key || '';
+        document.getElementById('openai-base-url').value = currentConfig.openai.base_url || '';
+        document.getElementById('openai-model').value = currentConfig.openai.model || '';
+        
+        // 填充Agent配置
+        document.getElementById('agent-max-iterations').value = currentConfig.agent.max_iterations || 30;
+        
+        // 填充工具列表
+        allTools = currentConfig.tools || [];
+        renderToolsList();
+    } catch (error) {
+        console.error('加载配置失败:', error);
+        alert('加载配置失败: ' + error.message);
+    }
+}
+
+// 渲染工具列表
+function renderToolsList() {
+    const toolsList = document.getElementById('tools-list');
+    toolsList.innerHTML = '';
+    
+    allTools.forEach(tool => {
+        const toolItem = document.createElement('div');
+        toolItem.className = 'tool-item';
+        toolItem.dataset.toolName = tool.name; // 保存原始工具名称
+        toolItem.innerHTML = `
+            <input type="checkbox" id="tool-${tool.name}" ${tool.enabled ? 'checked' : ''} />
+            <div class="tool-item-info">
+                <div class="tool-item-name">${escapeHtml(tool.name)}</div>
+                <div class="tool-item-desc">${escapeHtml(tool.description || '无描述')}</div>
+            </div>
+        `;
+        toolsList.appendChild(toolItem);
+    });
+}
+
+// 全选工具
+function selectAllTools() {
+    document.querySelectorAll('#tools-list input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = true;
+    });
+}
+
+// 全不选工具
+function deselectAllTools() {
+    document.querySelectorAll('#tools-list input[type="checkbox"]').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+}
+
+// 过滤工具
+function filterTools() {
+    const searchTerm = document.getElementById('tools-search').value.toLowerCase();
+    document.querySelectorAll('.tool-item').forEach(item => {
+        const toolName = (item.dataset.toolName || '').toLowerCase();
+        const toolDesc = item.querySelector('.tool-item-desc').textContent.toLowerCase();
+        if (toolName.includes(searchTerm) || toolDesc.includes(searchTerm)) {
+            item.classList.remove('hidden');
+        } else {
+            item.classList.add('hidden');
+        }
+    });
+}
+
+// 应用设置
+async function applySettings() {
+    try {
+        // 清除之前的验证错误状态
+        document.querySelectorAll('.form-group input').forEach(input => {
+            input.classList.remove('error');
+        });
+        
+        // 验证必填字段
+        const apiKey = document.getElementById('openai-api-key').value.trim();
+        const baseUrl = document.getElementById('openai-base-url').value.trim();
+        const model = document.getElementById('openai-model').value.trim();
+        
+        let hasError = false;
+        
+        if (!apiKey) {
+            document.getElementById('openai-api-key').classList.add('error');
+            hasError = true;
+        }
+        
+        if (!baseUrl) {
+            document.getElementById('openai-base-url').classList.add('error');
+            hasError = true;
+        }
+        
+        if (!model) {
+            document.getElementById('openai-model').classList.add('error');
+            hasError = true;
+        }
+        
+        if (hasError) {
+            alert('请填写所有必填字段（标记为 * 的字段）');
+            return;
+        }
+        
+        // 收集配置
+        const config = {
+            openai: {
+                api_key: apiKey,
+                base_url: baseUrl,
+                model: model
+            },
+            agent: {
+                max_iterations: parseInt(document.getElementById('agent-max-iterations').value) || 30
+            },
+            tools: []
+        };
+        
+        // 收集工具启用状态
+        document.querySelectorAll('#tools-list .tool-item').forEach(item => {
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            const toolName = item.dataset.toolName;
+            if (toolName) {
+                // 直接使用工具名称
+                config.tools.push({
+                    name: toolName,
+                    enabled: checkbox.checked
+                });
+            }
+        });
+        
+        // 更新配置
+        const updateResponse = await fetch('/api/config', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (!updateResponse.ok) {
+            const error = await updateResponse.json();
+            throw new Error(error.error || '更新配置失败');
+        }
+        
+        // 应用配置
+        const applyResponse = await fetch('/api/config/apply', {
+            method: 'POST'
+        });
+        
+        if (!applyResponse.ok) {
+            const error = await applyResponse.json();
+            throw new Error(error.error || '应用配置失败');
+        }
+        
+        alert('配置已成功应用！');
+        closeSettings();
+    } catch (error) {
+        console.error('应用配置失败:', error);
+        alert('应用配置失败: ' + error.message);
     }
 }
 

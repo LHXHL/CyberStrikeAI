@@ -73,9 +73,16 @@ func New(cfg *config.Config, log *logger.Logger) (*App, error) {
 	agentHandler := handler.NewAgentHandler(agent, db, log.Logger)
 	monitorHandler := handler.NewMonitorHandler(mcpServer, executor, log.Logger)
 	conversationHandler := handler.NewConversationHandler(db, log.Logger)
+	
+	// 获取配置文件路径
+	configPath := "config.yaml"
+	if len(os.Args) > 1 {
+		configPath = os.Args[1]
+	}
+	configHandler := handler.NewConfigHandler(configPath, cfg, mcpServer, executor, agent, log.Logger)
 
 	// 设置路由
-	setupRoutes(router, agentHandler, monitorHandler, conversationHandler, mcpServer)
+	setupRoutes(router, agentHandler, monitorHandler, conversationHandler, configHandler, mcpServer)
 
 	return &App{
 		config:    cfg,
@@ -113,7 +120,7 @@ func (a *App) Run() error {
 }
 
 // setupRoutes 设置路由
-func setupRoutes(router *gin.Engine, agentHandler *handler.AgentHandler, monitorHandler *handler.MonitorHandler, conversationHandler *handler.ConversationHandler, mcpServer *mcp.Server) {
+func setupRoutes(router *gin.Engine, agentHandler *handler.AgentHandler, monitorHandler *handler.MonitorHandler, conversationHandler *handler.ConversationHandler, configHandler *handler.ConfigHandler, mcpServer *mcp.Server) {
 	// API路由
 	api := router.Group("/api")
 	{
@@ -136,6 +143,11 @@ func setupRoutes(router *gin.Engine, agentHandler *handler.AgentHandler, monitor
 		api.GET("/monitor/execution/:id", monitorHandler.GetExecution)
 		api.GET("/monitor/stats", monitorHandler.GetStats)
 		api.GET("/monitor/vulnerabilities", monitorHandler.GetVulnerabilities)
+
+		// 配置管理
+		api.GET("/config", configHandler.GetConfig)
+		api.PUT("/config", configHandler.UpdateConfig)
+		api.POST("/config/apply", configHandler.ApplyConfig)
 
 		// MCP端点
 		api.POST("/mcp", func(c *gin.Context) {

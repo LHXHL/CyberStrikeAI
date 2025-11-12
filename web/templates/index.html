@@ -18,7 +18,15 @@
                     </svg>
                     <h1>CyberStrike</h1>
                 </div>
-                <p class="header-subtitle">安全测试平台</p>
+                <div class="header-right">
+                    <p class="header-subtitle">安全测试平台</p>
+                    <button class="settings-btn" onclick="openSettings()" title="设置">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </header>
 
@@ -44,6 +52,64 @@
                     <textarea id="chat-input" placeholder="输入测试目标或命令... (Shift+Enter 换行，Enter 发送)" rows="1"></textarea>
                     <button onclick="sendMessage()">发送</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置模态框 -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content settings-modal-content">
+            <div class="modal-header">
+                <h2>系统设置</h2>
+                <span class="modal-close" onclick="closeSettings()">&times;</span>
+            </div>
+            <div class="modal-body settings-body">
+                <!-- OpenAI配置 -->
+                <div class="settings-section">
+                    <h3>OpenAI 配置</h3>
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label for="openai-api-key">API Key <span style="color: red;">*</span></label>
+                            <input type="password" id="openai-api-key" placeholder="输入OpenAI API Key" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="openai-base-url">Base URL <span style="color: red;">*</span></label>
+                            <input type="text" id="openai-base-url" placeholder="https://api.openai.com/v1" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="openai-model">模型 <span style="color: red;">*</span></label>
+                            <input type="text" id="openai-model" placeholder="gpt-4" required />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MCP工具配置 -->
+                <div class="settings-section">
+                    <h3>MCP 工具配置</h3>
+                    <div class="tools-controls">
+                        <div class="tools-actions">
+                            <button class="btn-secondary" onclick="selectAllTools()">全选</button>
+                            <button class="btn-secondary" onclick="deselectAllTools()">全不选</button>
+                            <input type="text" id="tools-search" placeholder="搜索工具..." oninput="filterTools()" />
+                        </div>
+                        <div id="tools-list" class="tools-list"></div>
+                    </div>
+                </div>
+
+                <!-- Agent配置 -->
+                <div class="settings-section">
+                    <h3>Agent 配置</h3>
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label for="agent-max-iterations">最大迭代次数</label>
+                            <input type="number" id="agent-max-iterations" min="1" max="100" placeholder="30" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeSettings()">取消</button>
+                <button class="btn-primary" onclick="applySettings()">应用配置</button>
             </div>
         </div>
     </div>

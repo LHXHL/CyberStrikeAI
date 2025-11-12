@@ -66,6 +66,26 @@ func (s *Server) RegisterTool(tool Tool, handler ToolHandler) {
 	}
 }
 
+// ClearTools 清空所有工具（用于重新加载配置）
+func (s *Server) ClearTools() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// 清空工具和工具定义
+	s.tools = make(map[string]ToolHandler)
+	s.toolDefs = make(map[string]Tool)
+	
+	// 清空工具相关的资源（保留其他资源）
+	newResources := make(map[string]*Resource)
+	for uri, resource := range s.resources {
+		// 保留非工具资源
+		if !strings.HasPrefix(uri, "tool://") {
+			newResources[uri] = resource
+		}
+	}
+	s.resources = newResources
+}
+
 // HandleHTTP 处理HTTP请求
 func (s *Server) HandleHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
