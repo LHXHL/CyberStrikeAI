@@ -6,7 +6,7 @@
 
 - Web Mode
   ![Preview](./img/效果.png)
-- MCP Stdio Mode / MCP HTTP Mode
+- MCP Stdio / MCP HTTP Mode
   ![Preview](./img/mcp-stdio2.png)
 
 ## Changelog
