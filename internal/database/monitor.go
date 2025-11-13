@@ -69,16 +69,30 @@ func (db *DB) SaveToolExecution(exec *mcp.ToolExecution) error {
 	return nil
 }
 
-// LoadToolExecutions 加载所有工具执行记录
+// LoadToolExecutions 加载所有工具执行记录（支持分页）
 func (db *DB) LoadToolExecutions() ([]*mcp.ToolExecution, error) {
+	return db.LoadToolExecutionsWithPagination(0, 1000)
+}
+
+// LoadToolExecutionsWithPagination 分页加载工具执行记录
+// limit: 最大返回记录数，0 表示使用默认值 1000
+// offset: 跳过的记录数，用于分页
+func (db *DB) LoadToolExecutionsWithPagination(offset, limit int) ([]*mcp.ToolExecution, error) {
+	if limit <= 0 {
+		limit = 1000 // 默认限制
+	}
+	if limit > 10000 {
+		limit = 10000 // 最大限制，防止一次性加载过多数据
+	}
+	
 	query := `
 		SELECT id, tool_name, arguments, status, result, error, start_time, end_time, duration_ms
 		FROM tool_executions
 		ORDER BY start_time DESC
-		LIMIT 1000
+		LIMIT ? OFFSET ?
 	`
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, limit, offset)
 	if err != nil {
 		return nil, err
 	}

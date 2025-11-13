@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -27,15 +28,16 @@ type MonitorStorage interface {
 
 // Server MCP服务器
 type Server struct {
-	tools      map[string]ToolHandler
-	toolDefs   map[string]Tool // 工具定义
-	executions map[string]*ToolExecution
-	stats      map[string]*ToolStats
-	prompts    map[string]*Prompt   // 提示词模板
-	resources  map[string]*Resource // 资源
-	storage    MonitorStorage       // 可选的持久化存储
-	mu         sync.RWMutex
-	logger     *zap.Logger
+	tools                 map[string]ToolHandler
+	toolDefs              map[string]Tool // 工具定义
+	executions            map[string]*ToolExecution
+	stats                 map[string]*ToolStats
+	prompts               map[string]*Prompt   // 提示词模板
+	resources             map[string]*Resource // 资源
+	storage               MonitorStorage       // 可选的持久化存储
+	mu                    sync.RWMutex
+	logger                *zap.Logger
+	maxExecutionsInMemory int // 内存中最大执行记录数
 }
 
 // ToolHandler 工具处理函数
@@ -49,14 +51,15 @@ func NewServer(logger *zap.Logger) *Server {
 // NewServerWithStorage 创建新的MCP服务器（带持久化存储）
 func NewServerWithStorage(logger *zap.Logger, storage MonitorStorage) *Server {
 	s := &Server{
-		tools:      make(map[string]ToolHandler),
-		toolDefs:   make(map[string]Tool),
-		executions: make(map[string]*ToolExecution),
-		stats:      make(map[string]*ToolStats),
-		prompts:    make(map[string]*Prompt),
-		resources:  make(map[string]*Resource),
-		storage:    storage,
-		logger:     logger,
+		tools:                 make(map[string]ToolHandler),
+		toolDefs:              make(map[string]Tool),
+		executions:            make(map[string]*ToolExecution),
+		stats:                 make(map[string]*ToolStats),
+		prompts:               make(map[string]*Prompt),
+		resources:             make(map[string]*Resource),
+		storage:               storage,
+		logger:                logger,
+		maxExecutionsInMemory: 1000, // 默认最多在内存中保留1000条执行记录
 	}
 
 	// 初始化默认提示词和资源
@@ -267,6 +270,8 @@ func (s *Server) handleCallTool(msg *Message) *Message {
 
 	s.mu.Lock()
 	s.executions[executionID] = execution
+	// 如果内存中的执行记录超过限制，清理最旧的记录
+	s.cleanupOldExecutions()
 	s.mu.Unlock()
 
 	if s.storage != nil {
@@ -499,9 +504,11 @@ func (s *Server) loadHistoricalData() {
 	} else {
 		s.mu.Lock()
 		for _, exec := range executions {
-			// 只加载最近1000条，避免内存占用过大
-			if len(s.executions) < 1000 {
+			// 只加载最近 maxExecutionsInMemory 条，避免内存占用过大
+			if len(s.executions) < s.maxExecutionsInMemory {
 				s.executions[exec.ID] = exec
+			} else {
+				break
 			}
 		}
 		s.mu.Unlock()
@@ -618,6 +625,8 @@ func (s *Server) CallTool(ctx context.Context, toolName string, args map[string]
 
 	s.mu.Lock()
 	s.executions[executionID] = execution
+	// 如果内存中的执行记录超过限制，清理最旧的记录
+	s.cleanupOldExecutions()
 	s.mu.Unlock()
 
 	if s.storage != nil {
@@ -687,6 +696,43 @@ func (s *Server) CallTool(ctx context.Context, toolName string, args map[string]
 	}
 
 	return finalResult, executionID, nil
+}
+
+// cleanupOldExecutions 清理旧的执行记录，防止内存无限增长
+func (s *Server) cleanupOldExecutions() {
+	if len(s.executions) <= s.maxExecutionsInMemory {
+		return
+	}
+
+	// 按开始时间排序，找出最旧的记录
+	type execWithTime struct {
+		id        string
+		startTime time.Time
+	}
+	execs := make([]execWithTime, 0, len(s.executions))
+	for id, exec := range s.executions {
+		execs = append(execs, execWithTime{
+			id:        id,
+			startTime: exec.StartTime,
+		})
+	}
+
+	// 使用 sort 包进行高效排序（最旧的在前）
+	sort.Slice(execs, func(i, j int) bool {
+		return execs[i].startTime.Before(execs[j].startTime)
+	})
+
+	// 删除最旧的记录，保留 maxExecutionsInMemory 条
+	toDelete := len(s.executions) - s.maxExecutionsInMemory
+	for i := 0; i < toDelete; i++ {
+		delete(s.executions, execs[i].id)
+	}
+
+	s.logger.Debug("清理旧的执行记录",
+		zap.Int("before", len(execs)),
+		zap.Int("after", len(s.executions)),
+		zap.Int("deleted", toDelete),
+	)
 }
 
 // initDefaultPrompts 初始化默认提示词模板
