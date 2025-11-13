@@ -7,44 +7,38 @@
 
 # 服务器配置
 server:
-    host: 0.0.0.0  # 监听地址，0.0.0.0 表示监听所有网络接口
-    port: 8080      # HTTP 服务端口，可通过浏览器访问 http://localhost:8080
-
+  host: 0.0.0.0 # 监听地址，0.0.0.0 表示监听所有网络接口
+  port: 8080 # HTTP 服务端口，可通过浏览器访问 http://localhost:8080
 # 日志配置
 log:
-    level: info     # 日志级别: debug(调试), info(信息), warn(警告), error(错误)
-    output: stdout  # 日志输出位置: stdout(标准输出), stderr(标准错误), 或文件路径
-
+  level: info # 日志级别: debug(调试), info(信息), warn(警告), error(错误)
+  output: stdout # 日志输出位置: stdout(标准输出), stderr(标准错误), 或文件路径
 # MCP 协议配置
 # MCP (Model Context Protocol) 用于工具注册和调用
 mcp:
-    enabled: true   # 是否启用 MCP 服务器
-    host: 0.0.0.0   # MCP 服务器监听地址
-    port: 8081      # MCP 服务器端口
-
+  enabled: true # 是否启用 MCP 服务器
+  host: 0.0.0.0 # MCP 服务器监听地址
+  port: 8081 # MCP 服务器端口
 # AI 模型配置（支持 OpenAI 兼容 API）
 # 必填项：api_key, base_url, model 必须填写才能正常运行
 openai:
-    api_key: sk-xxx  # API 密钥（必填）
-    base_url: https://api.deepseek.com/v1          # API 基础 URL（必填）
-                                                    # 支持的 API 服务商：
-                                                    # - OpenAI: https://api.openai.com/v1
-                                                    # - DeepSeek: https://api.deepseek.com/v1
-                                                    # - 其他兼容 OpenAI 协议的 API
-    model: deepseek-chat  # 模型名称（必填）
-                          # 常用模型: gpt-4, gpt-3.5-turbo, deepseek-chat, claude-3-opus 等
-
+  base_url: https://api.deepseek.com/v1 # API 基础 URL（必填）
+  api_key: sk-xxx # API 密钥（必填）
+  # 支持的 API 服务商：
+  # - OpenAI: https://api.openai.com/v1
+  # - DeepSeek: https://api.deepseek.com/v1
+  # - 其他兼容 OpenAI 协议的 API
+  model: deepseek-chat # 模型名称（必填）
+  # 常用模型: gpt-4, gpt-3.5-turbo, deepseek-chat, claude-3-opus 等
 # Agent 配置
 agent:
-    max_iterations: 30  # 最大迭代次数，AI 代理最多执行多少轮工具调用
-                        # 达到最大迭代次数时，AI 会自动总结测试结果
-
+  max_iterations: 30 # 最大迭代次数，AI 代理最多执行多少轮工具调用
+  # 达到最大迭代次数时，AI 会自动总结测试结果
 # 数据库配置
 database:
-    path: data/conversations.db  # SQLite 数据库文件路径，用于存储对话历史和消息
-
+  path: data/conversations.db # SQLite 数据库文件路径，用于存储对话历史和消息
 # 安全工具配置
 security:
-    tools_dir: tools  # 工具配置文件目录（相对于配置文件所在目录）
-                      # 系统会从该目录加载所有 .yaml 格式的工具配置文件
-                      # 推荐方式：在 tools/ 目录下为每个工具创建独立的配置文件
+  tools_dir: tools # 工具配置文件目录（相对于配置文件所在目录）
+  # 系统会从该目录加载所有 .yaml 格式的工具配置文件
+  # 推荐方式：在 tools/ 目录下为每个工具创建独立的配置文件

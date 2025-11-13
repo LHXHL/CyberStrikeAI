@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"os"
@@ -204,51 +205,27 @@ func (h *ConfigHandler) ApplyConfig(c *gin.Context) {
 
 // saveConfig 保存配置到文件
 func (h *ConfigHandler) saveConfig() error {
-	// 读取现有配置文件
+	// 读取现有配置文件并创建备份
 	data, err := os.ReadFile(h.configPath)
 	if err != nil {
 		return fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
-	// 解析现有配置
-	var existingConfig map[string]interface{}
-	if err := yaml.Unmarshal(data, &existingConfig); err != nil {
+	if err := os.WriteFile(h.configPath+".backup", data, 0644); err != nil {
+		h.logger.Warn("创建配置备份失败", zap.Error(err))
+	}
+
+	root, err := loadYAMLDocument(h.configPath)
+	if err != nil {
 		return fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
-	// 更新配置值
-	if existingConfig["openai"] == nil {
-		existingConfig["openai"] = make(map[string]interface{})
-	}
-	openaiMap := existingConfig["openai"].(map[string]interface{})
-	if h.config.OpenAI.APIKey != "" {
-		openaiMap["api_key"] = h.config.OpenAI.APIKey
-	}
-	if h.config.OpenAI.BaseURL != "" {
-		openaiMap["base_url"] = h.config.OpenAI.BaseURL
-	}
-	if h.config.OpenAI.Model != "" {
-		openaiMap["model"] = h.config.OpenAI.Model
-	}
+	updateAgentConfig(root, h.config.Agent.MaxIterations)
+	updateMCPConfig(root, h.config.MCP)
+	updateOpenAIConfig(root, h.config.OpenAI)
 
-	if existingConfig["mcp"] == nil {
-		existingConfig["mcp"] = make(map[string]interface{})
-	}
-	mcpMap := existingConfig["mcp"].(map[string]interface{})
-	mcpMap["enabled"] = h.config.MCP.Enabled
-	if h.config.MCP.Host != "" {
-		mcpMap["host"] = h.config.MCP.Host
-	}
-	if h.config.MCP.Port > 0 {
-		mcpMap["port"] = h.config.MCP.Port
-	}
-
-	if h.config.Agent.MaxIterations > 0 {
-		if existingConfig["agent"] == nil {
-			existingConfig["agent"] = make(map[string]interface{})
-		}
-		agentMap := existingConfig["agent"].(map[string]interface{})
-		agentMap["max_iterations"] = h.config.Agent.MaxIterations
+	if err := writeYAMLDocument(h.configPath, root); err != nil {
+		return fmt.Errorf("保存配置文件失败: %w", err)
 	}
 
 	// 更新工具配置文件中的enabled状态
@@ -271,31 +248,25 @@ func (h *ConfigHandler) saveConfig() error {
 				}
 			}
 
-			// 读取工具配置文件
 			toolData, err := os.ReadFile(toolFile)
 			if err != nil {
 				h.logger.Warn("读取工具配置文件失败", zap.String("tool", tool.Name), zap.Error(err))
 				continue
 			}
 
-			// 解析工具配置
-			var toolConfig map[string]interface{}
-			if err := yaml.Unmarshal(toolData, &toolConfig); err != nil {
-				h.logger.Warn("解析工具配置文件失败", zap.String("tool", tool.Name), zap.Error(err))
-				continue
+			if err := os.WriteFile(toolFile+".backup", toolData, 0644); err != nil {
+				h.logger.Warn("创建工具配置备份失败", zap.String("tool", tool.Name), zap.Error(err))
 			}
 
-			// 更新enabled状态
-			toolConfig["enabled"] = tool.Enabled
-
-			// 保存工具配置文件
-			updatedData, err := yaml.Marshal(toolConfig)
+			toolDoc, err := loadYAMLDocument(toolFile)
 			if err != nil {
-				h.logger.Warn("序列化工具配置失败", zap.String("tool", tool.Name), zap.Error(err))
+				h.logger.Warn("解析工具配置失败", zap.String("tool", tool.Name), zap.Error(err))
 				continue
 			}
 
-			if err := os.WriteFile(toolFile, updatedData, 0644); err != nil {
+			setBoolInMap(toolDoc.Content[0], "enabled", tool.Enabled)
+
+			if err := writeYAMLDocument(toolFile, toolDoc); err != nil {
 				h.logger.Warn("保存工具配置文件失败", zap.String("tool", tool.Name), zap.Error(err))
 				continue
 			}
@@ -304,24 +275,160 @@ func (h *ConfigHandler) saveConfig() error {
 		}
 	}
 
-	// 保存主配置文件
-	updatedData, err := yaml.Marshal(existingConfig)
-	if err != nil {
-		return fmt.Errorf("序列化配置失败: %w", err)
-	}
-
-	// 创建备份
-	backupPath := h.configPath + ".backup"
-	if err := os.WriteFile(backupPath, data, 0644); err != nil {
-		h.logger.Warn("创建配置备份失败", zap.Error(err))
-	}
-
-	// 保存新配置
-	if err := os.WriteFile(h.configPath, updatedData, 0644); err != nil {
-		return fmt.Errorf("保存配置文件失败: %w", err)
-	}
-
 	h.logger.Info("配置已保存", zap.String("path", h.configPath))
 	return nil
 }
+
+func loadYAMLDocument(path string) (*yaml.Node, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(bytes.TrimSpace(data)) == 0 {
+		return newEmptyYAMLDocument(), nil
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return newEmptyYAMLDocument(), nil
+	}
+
+	if doc.Content[0].Kind != yaml.MappingNode {
+		root := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		doc.Content = []*yaml.Node{root}
+	}
+
+	return &doc, nil
+}
+
+func newEmptyYAMLDocument() *yaml.Node {
+	root := &yaml.Node{
+		Kind:    yaml.DocumentNode,
+		Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}},
+	}
+	return root
+}
+
+func writeYAMLDocument(path string, doc *yaml.Node) error {
+	var buf bytes.Buffer
+	encoder := yaml.NewEncoder(&buf)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(doc); err != nil {
+		return err
+	}
+	if err := encoder.Close(); err != nil {
+		return err
+	}
+	return os.WriteFile(path, buf.Bytes(), 0644)
+}
+
+func updateAgentConfig(doc *yaml.Node, maxIterations int) {
+	root := doc.Content[0]
+	agentNode := ensureMap(root, "agent")
+	setIntInMap(agentNode, "max_iterations", maxIterations)
+}
+
+func updateMCPConfig(doc *yaml.Node, cfg config.MCPConfig) {
+	root := doc.Content[0]
+	mcpNode := ensureMap(root, "mcp")
+	setBoolInMap(mcpNode, "enabled", cfg.Enabled)
+	setStringInMap(mcpNode, "host", cfg.Host)
+	setIntInMap(mcpNode, "port", cfg.Port)
+}
+
+func updateOpenAIConfig(doc *yaml.Node, cfg config.OpenAIConfig) {
+	root := doc.Content[0]
+	openaiNode := ensureMap(root, "openai")
+	setStringInMap(openaiNode, "api_key", cfg.APIKey)
+	setStringInMap(openaiNode, "base_url", cfg.BaseURL)
+	setStringInMap(openaiNode, "model", cfg.Model)
+}
+
+func ensureMap(parent *yaml.Node, path ...string) *yaml.Node {
+	current := parent
+	for _, key := range path {
+		value := findMapValue(current, key)
+		if value == nil {
+			keyNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}
+			mapNode := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			current.Content = append(current.Content, keyNode, mapNode)
+			value = mapNode
+		}
+
+		if value.Kind != yaml.MappingNode {
+			value.Kind = yaml.MappingNode
+			value.Tag = "!!map"
+			value.Style = 0
+			value.Content = nil
+		}
+
+		current = value
+	}
+
+	return current
+}
+
+func findMapValue(mapNode *yaml.Node, key string) *yaml.Node {
+	if mapNode == nil || mapNode.Kind != yaml.MappingNode {
+		return nil
+	}
+
+	for i := 0; i < len(mapNode.Content); i += 2 {
+		if mapNode.Content[i].Value == key {
+			return mapNode.Content[i+1]
+		}
+	}
+	return nil
+}
+
+func ensureKeyValue(mapNode *yaml.Node, key string) (*yaml.Node, *yaml.Node) {
+	if mapNode == nil || mapNode.Kind != yaml.MappingNode {
+		return nil, nil
+	}
+
+	for i := 0; i < len(mapNode.Content); i += 2 {
+		if mapNode.Content[i].Value == key {
+			return mapNode.Content[i], mapNode.Content[i+1]
+		}
+	}
+
+	keyNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}
+	valueNode := &yaml.Node{}
+	mapNode.Content = append(mapNode.Content, keyNode, valueNode)
+	return keyNode, valueNode
+}
+
+func setStringInMap(mapNode *yaml.Node, key, value string) {
+	_, valueNode := ensureKeyValue(mapNode, key)
+	valueNode.Kind = yaml.ScalarNode
+	valueNode.Tag = "!!str"
+	valueNode.Style = 0
+	valueNode.Value = value
+}
+
+func setIntInMap(mapNode *yaml.Node, key string, value int) {
+	_, valueNode := ensureKeyValue(mapNode, key)
+	valueNode.Kind = yaml.ScalarNode
+	valueNode.Tag = "!!int"
+	valueNode.Style = 0
+	valueNode.Value = fmt.Sprintf("%d", value)
+}
+
+func setBoolInMap(mapNode *yaml.Node, key string, value bool) {
+	_, valueNode := ensureKeyValue(mapNode, key)
+	valueNode.Kind = yaml.ScalarNode
+	valueNode.Tag = "!!bool"
+	valueNode.Style = 0
+	if value {
+		valueNode.Value = "true"
+	} else {
+		valueNode.Value = "false"
+	}
+}
+
 
