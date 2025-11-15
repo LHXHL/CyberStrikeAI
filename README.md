@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="web/templates/logo.png" alt="CyberStrikeAI Logo" width="200">
+</div>
+
 # CyberStrikeAI
 
 [中文](README_CN.md) | [English](README.md)
@@ -12,7 +16,7 @@
   ![Preview](./img/外部MCP接入.png)
 
 ## Changelog
-- 2025.11.15 Added large result pagination feature: when tool execution results exceed the threshold (default 200KB), automatically save to file and return execution ID, support paginated queries, keyword search, conditional filtering, and regex matching through query_execution_result tool, effectively solving the problem of overly long single responses and improving large file processing capabilities
+- 2025.11.15 Added large result pagination feature: when tool execution results exceed the threshold (default 50KB), automatically save to file and return execution ID, support paginated queries, keyword search, conditional filtering, and regex matching through query_execution_result tool, effectively solving the problem of overly long single responses and improving large file processing capabilities
 - 2025.11.15 Added external MCP integration feature: support for integrating external MCP servers to extend tool capabilities, supports both stdio and HTTP transport modes, tool-level enable/disable control, complete configuration guide and management APIs
 - 2025.11.14 Performance optimizations: optimized tool lookup from O(n) to O(1) using index map, added automatic cleanup mechanism for execution records to prevent memory leaks, and added pagination support for database queries
 - 2025.11.13 Added authentication for the web mode, including automatic password generation and in-app password change
