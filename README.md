@@ -10,14 +10,14 @@
 
 - Web Mode  
 
-  <img src="./img/效果.png" alt="Preview" width="400">
+  <img src="./img/效果.png" alt="Preview" width="600">
 - MCP Stdio Mode
 
-  <img src="./img/mcp-stdio2.png" alt="Preview" width="400">
+  <img src="./img/mcp-stdio2.png" alt="Preview" width="600">
 
 - External MCP Server Integration (supports stdio and HTTP transport modes)
 
-  <img src="./img/外部MCP接入.png" alt="Preview" width="400">
+  <img src="./img/外部MCP接入.png" alt="Preview" width="600">
 
 ## Changelog
 - 2025.11.17 Added attack chain visualization feature: automatically build attack chains from conversations using AI analysis, visualize tool execution flows, vulnerability discovery paths, and relationships between nodes, support interactive graph exploration with risk scoring
