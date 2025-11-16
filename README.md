@@ -9,7 +9,7 @@
 🚀 **AI-Powered Autonomous Penetration Testing Platform** - Built with Golang, featuring hundreds of built-in security tools, flexible custom tool extensions, and intelligent AI decision-making through MCP protocol, making security testing as simple as a conversation.
 
 - Web Mode
-  ![Preview](./img/效果.png)
+  <img src="./img/效果.png" alt="Preview" width="400">
 - MCP Stdio Mode
   ![Preview](./img/mcp-stdio2.png)
 - External MCP Server Integration (supports stdio and HTTP transport modes)
