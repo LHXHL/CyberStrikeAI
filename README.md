@@ -18,7 +18,8 @@
   <img src="./img/外部MCP接入.png" alt="Preview" width="600">
 
 - Attack Chain Visualization   
-  <img src="./img/攻击链.png" alt="Preview" width="600">
+  <img src="./img/攻击链.png" alt="Preview" width="600">  
+  <img src="./img/攻击链.jpg" alt="Preview" width="600">
 
 ## Changelog
 - 2025.11.17 Added attack chain visualization feature: automatically build attack chains from conversations using AI analysis, visualize tool execution flows, vulnerability discovery paths, and relationships between nodes, support interactive graph exploration with risk scoring
