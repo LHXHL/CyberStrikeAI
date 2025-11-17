@@ -316,8 +316,11 @@ func (b *Builder) buildChainGenerationPrompt(contextData *ContextData) (string, 
 	for i, msg := range contextData.Messages {
 		promptBuilder.WriteString(fmt.Sprintf("消息%d [%s]:\n", i+1, msg.Role))
 
-		// 检查是否已总结
-		if summary, ok := contextData.SummarizedItems[msg.ID]; ok {
+		isUserMessage := strings.EqualFold(msg.Role, "user")
+		// 用户输入必须原样提供给攻击链模型
+		if isUserMessage {
+			promptBuilder.WriteString(fmt.Sprintf("%s\n\n", msg.Content))
+		} else if summary, ok := contextData.SummarizedItems[msg.ID]; ok {
 			promptBuilder.WriteString(fmt.Sprintf("[已总结] %s\n\n", summary))
 		} else {
 			content := msg.Content
@@ -547,6 +550,9 @@ func (b *Builder) compressLongestItem(ctx context.Context, contextData *ContextD
 
 	// 查找最长的消息
 	for _, msg := range contextData.Messages {
+		if strings.EqualFold(msg.Role, "user") {
+			continue
+		}
 		if _, alreadySummarized := contextData.SummarizedItems[msg.ID]; alreadySummarized {
 			continue
 		}
