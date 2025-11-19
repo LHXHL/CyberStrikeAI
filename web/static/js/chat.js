@@ -711,14 +711,27 @@ function addAttackChainButton(conversationId) {
     }
 
     if (conversationId) {
-        attackChainBtn.disabled = false;
-        attackChainBtn.title = '查看当前对话的攻击链';
-        attackChainBtn.onclick = () => showAttackChain(conversationId);
+        const isRunning = typeof isConversationTaskRunning === 'function'
+            ? isConversationTaskRunning(conversationId)
+            : false;
+        if (isRunning) {
+            attackChainBtn.disabled = true;
+            attackChainBtn.title = '当前对话正在执行，请稍后再生成攻击链';
+            attackChainBtn.onclick = null;
+        } else {
+            attackChainBtn.disabled = false;
+            attackChainBtn.title = '查看当前对话的攻击链';
+            attackChainBtn.onclick = () => showAttackChain(conversationId);
+        }
     } else {
         attackChainBtn.disabled = true;
         attackChainBtn.title = '请选择一个对话以查看攻击链';
         attackChainBtn.onclick = null;
     }
+}
+
+function updateAttackChainAvailability() {
+    addAttackChainButton(currentConversationId);
 }
 
 // 显示攻击链模态框

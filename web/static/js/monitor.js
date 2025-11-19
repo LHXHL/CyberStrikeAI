@@ -1,6 +1,30 @@
 const progressTaskState = new Map();
 let activeTaskInterval = null;
 const ACTIVE_TASK_REFRESH_INTERVAL = 10000; // 10秒检查一次
+const TASK_FINAL_STATUSES = new Set(['failed', 'timeout', 'cancelled', 'completed']);
+
+const conversationExecutionTracker = {
+    activeConversations: new Set(),
+    update(tasks = []) {
+        this.activeConversations.clear();
+        tasks.forEach(task => {
+            if (
+                task &&
+                task.conversationId &&
+                !TASK_FINAL_STATUSES.has(task.status)
+            ) {
+                this.activeConversations.add(task.conversationId);
+            }
+        });
+    },
+    isRunning(conversationId) {
+        return !!conversationId && this.activeConversations.has(conversationId);
+    }
+};
+
+function isConversationTaskRunning(conversationId) {
+    return conversationExecutionTracker.isRunning(conversationId);
+}
 
 function registerProgressTask(progressId, conversationId = null) {
     const state = progressTaskState.get(progressId) || {};
@@ -793,7 +817,13 @@ function renderActiveTasks(tasks) {
     const bar = document.getElementById('active-tasks-bar');
     if (!bar) return;
 
-    if (!tasks || tasks.length === 0) {
+    const normalizedTasks = Array.isArray(tasks) ? tasks : [];
+    conversationExecutionTracker.update(normalizedTasks);
+    if (typeof updateAttackChainAvailability === 'function') {
+        updateAttackChainAvailability();
+    }
+
+    if (normalizedTasks.length === 0) {
         bar.style.display = 'none';
         bar.innerHTML = '';
         return;
@@ -802,7 +832,7 @@ function renderActiveTasks(tasks) {
     bar.style.display = 'flex';
     bar.innerHTML = '';
 
-    tasks.forEach(task => {
+    normalizedTasks.forEach(task => {
         const item = document.createElement('div');
         item.className = 'active-task-item';
 
