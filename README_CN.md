@@ -25,6 +25,25 @@ CyberStrikeAI 是一款 **AI 原生渗透测试协同体**，以 Go 编写，内
 - 🔗 攻击链可视化、风险打分与步骤回放
 - 🔒 Web 登录保护、审计日志、SQLite 持久化
 
+## 工具概览
+
+系统预置 100+ 渗透/攻防工具，覆盖完整攻击链：
+
+- **网络扫描**：nmap、masscan、rustscan、arp-scan、nbtscan
+- **Web 应用扫描**：sqlmap、nikto、dirb、gobuster、feroxbuster、ffuf、httpx
+- **漏洞扫描**：nuclei、wpscan、wafw00f、dalfox、xsser
+- **子域名枚举**：subfinder、amass、findomain、dnsenum、fierce
+- **API 安全**：graphql-scanner、arjun、api-fuzzer、api-schema-analyzer
+- **容器安全**：trivy、clair、docker-bench-security、kube-bench、kube-hunter
+- **云安全**：prowler、scout-suite、cloudmapper、pacu、terrascan、checkov
+- **二进制分析**：gdb、radare2、ghidra、objdump、strings、binwalk
+- **漏洞利用**：metasploit、msfvenom、pwntools、ropper、ropgadget
+- **密码破解**：hashcat、john、hashpump
+- **取证分析**：volatility、volatility3、foremost、steghide、exiftool
+- **后渗透**：linpeas、winpeas、mimikatz、bloodhound、impacket、responder
+- **CTF 实用工具**：stegsolve、zsteg、hash-identifier、fcrackzip、pdfcrack、cyberchef
+- **系统辅助**：exec、create-file、delete-file、list-files、modify-file
+
 ## 基础使用
 
 ### 快速上手
