@@ -168,6 +168,124 @@ args:
         except (TypeError, ValueError):
             return None
 
+    def encode_form_data(data: str):
+        """
+        对application/x-www-form-urlencoded格式的数据进行URL编码
+        解析key=value格式，对值部分进行URL编码，保持键名不变
+        支持多个键值对（用&分隔）
+        正确处理值中包含=的情况（使用split('=', 1)只分割第一个=）
+        智能处理值中包含&的情况（通过检查&后是否跟着key=模式来判断）
+        
+        注意：假设输入是未编码的原始数据，如果已经是编码的，可能会重复编码
+        """
+        if not data:
+            return data
+        
+        # 智能分割：找到真正的键值对分隔符&
+        # &是分隔符的条件：&后面跟着key=模式（即非空白字符后跟=）
+        def find_key_value_pairs(text):
+            """找到所有的key=value对，正确处理值中的&和="""
+            pairs = []
+            i = 0
+            text_len = len(text)
+            
+            while i < text_len:
+                # 跳过空白
+                while i < text_len and text[i] in ' \t\n\r':
+                    i += 1
+                if i >= text_len:
+                    break
+                
+                # 查找键名（到第一个=为止）
+                key_start = i
+                while i < text_len and text[i] != '=':
+                    i += 1
+                
+                if i >= text_len:
+                    # 没有=，可能是单个值
+                    remaining = text[key_start:].strip()
+                    if remaining:
+                        pairs.append((None, remaining))
+                    break
+                
+                # 提取键名
+                key = text[key_start:i].strip()
+                i += 1  # 跳过=
+                
+                if not key:
+                    continue
+                
+                # 查找值的结束位置
+                # 值可能包含&，需要判断&是否是分隔符
+                value_start = i
+                value_end = text_len
+                
+                # 从值开始位置查找&
+                j = value_start
+                while j < text_len:
+                    if text[j] == '&':
+                        # 检查&后面是否跟着key=模式
+                        k = j + 1
+                        # 跳过空白
+                        while k < text_len and text[k] in ' \t\n\r':
+                            k += 1
+                        # 查找下一个=或&
+                        m = k
+                        while m < text_len and text[m] not in '=&':
+                            m += 1
+                        # 如果找到=，说明&后面是新的键值对
+                        if m < text_len and text[m] == '=':
+                            value_end = j
+                            i = j + 1  # 从&后开始下一轮
+                            break
+                    j += 1
+                
+                # 提取值
+                value = text[value_start:value_end]
+                pairs.append((key, value))
+                
+                if value_end < text_len:
+                    i = value_end + 1
+                else:
+                    break
+            
+            return pairs
+        
+        # 解析所有键值对
+        pairs = find_key_value_pairs(data)
+        parts = []
+        
+        for key, value in pairs:
+            if key is None:
+                # 没有键，只有值
+                parts.append(urllib.parse.quote_plus(value, safe=''))
+            else:
+                # 对值进行URL编码
+                encoded_value = urllib.parse.quote_plus(value, safe='')
+                parts.append(f"{key}={encoded_value}")
+        
+        return '&'.join(parts)
+
+    def should_encode_data(headers: list, data: str):
+        """
+        判断是否需要对POST数据进行URL编码
+        如果Content-Type是application/x-www-form-urlencoded，则需要编码
+        """
+        if not data:
+            return False
+        
+        content_type = None
+        for header in headers:
+            if ':' in header:
+                h_key, h_value = header.split(':', 1)
+                if h_key.strip().lower() == 'content-type':
+                    content_type = h_value.strip().lower()
+                    break
+        
+        if content_type and 'application/x-www-form-urlencoded' in content_type:
+            return True
+        return False
+
     parser = argparse.ArgumentParser(description="Enhanced HTTP testing helper")
     parser.add_argument("--url", required=True)
     parser.add_argument("--method", default="GET")
@@ -189,6 +307,7 @@ args:
     parser.add_argument("--show-command", dest="show_command", action="store_true")
     parser.add_argument("--show-summary", dest="show_summary", action="store_true")
     parser.add_argument("--response-encoding", dest="response_encoding", default="")
+    parser.add_argument("--debug", dest="debug", action="store_true")
     args = parser.parse_args()
 
     repeat = max(1, args.repeat)
@@ -220,10 +339,52 @@ args:
         curl_cmd.append("-k")
     if args.proxy:
         curl_cmd.extend(["-x", args.proxy])
-    for header in parse_headers(args.headers):
+    
+    # 解析headers以便检查Content-Type
+    parsed_headers = parse_headers(args.headers)
+    for header in parsed_headers:
         curl_cmd.extend(["-H", header])
-    if args.data:
-        curl_cmd.extend(["--data", args.data])
+    
+    # 处理POST数据：如果是表单数据，需要URL编码
+    prepared_data = args.data
+    if args.debug and args.data:
+        print("\n===== Debug: POST Data Processing =====")
+        print(f"Original data: {repr(args.data)}")
+        print(f"Data length: {len(args.data)} bytes")
+        # 显示原始数据中的键值对
+        if '=' in args.data:
+            parts = args.data.split('&')
+            print(f"Detected {len(parts)} key-value pair(s):")
+            for i, part in enumerate(parts, 1):
+                if '=' in part:
+                    k, v = part.split('=', 1)
+                    print(f"  [{i}] {k} = {repr(v[:50])}{'...' if len(v) > 50 else ''} (length: {len(v)})")
+                else:
+                    print(f"  [{i}] (no key): {repr(part[:50])}{'...' if len(part) > 50 else ''}")
+        if should_encode_data(parsed_headers, args.data):
+            print("Content-Type detected: application/x-www-form-urlencoded")
+            print("Encoding will be applied...")
+        else:
+            print("No encoding needed (not form-urlencoded)")
+    
+    if args.data and should_encode_data(parsed_headers, args.data):
+        prepared_data = encode_form_data(args.data)
+        if args.debug:
+            print(f"\nEncoded data: {repr(prepared_data)}")
+            print(f"Encoded length: {len(prepared_data)} bytes")
+            # 显示编码后的键值对
+            if '&' in prepared_data:
+                encoded_parts = prepared_data.split('&')
+                print(f"Encoded into {len(encoded_parts)} key-value pair(s):")
+                for i, part in enumerate(encoded_parts, 1):
+                    if '=' in part:
+                        k, v = part.split('=', 1)
+                        print(f"  [{i}] {k} = {repr(v[:80])}{'...' if len(v) > 80 else ''} (length: {len(v)})")
+                    else:
+                        print(f"  [{i}] (no key): {repr(part[:80])}{'...' if len(part) > 80 else ''}")
+    
+    if prepared_data:
+        curl_cmd.extend(["--data", prepared_data])
     metrics_template = METRIC_MARKER + ":" + "|".join([
         "%{time_namelookup}",
         "%{time_connect}",
@@ -425,6 +586,12 @@ parameters:
     required: false
     default: true
     flag: "--show-summary"
+  - name: "debug"
+    type: "bool"
+    description: "调试模式：打印POST数据的原始值和编码后的值，方便排查编码问题"
+    required: false
+    default: false
+    flag: "--debug"
   - name: "response_encoding"
     type: "string"
     description: "强制响应解码使用的编码（默认自动检测，可用于指定GBK等场景）"
