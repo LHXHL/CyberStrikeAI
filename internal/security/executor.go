@@ -1,9 +1,12 @@
 package security
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -587,6 +590,88 @@ func (e *Executor) formatParamValue(param config.ParameterConfig, value interfac
 	}
 }
 
+// isBackgroundCommand 检测命令是否为完全后台命令（末尾有 & 符号，但不在引号内）
+// 注意：command1 & command2 这种情况不算完全后台，因为command2会在前台执行
+func (e *Executor) isBackgroundCommand(command string) bool {
+	// 移除首尾空格
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return false
+	}
+
+	// 检查命令中所有不在引号内的 & 符号
+	// 找到最后一个 & 符号，检查它是否在命令末尾
+	inSingleQuote := false
+	inDoubleQuote := false
+	escaped := false
+	lastAmpersandPos := -1
+
+	for i, r := range command {
+		if escaped {
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+		if r == '\'' && !inDoubleQuote {
+			inSingleQuote = !inSingleQuote
+			continue
+		}
+		if r == '"' && !inSingleQuote {
+			inDoubleQuote = !inDoubleQuote
+			continue
+		}
+		if r == '&' && !inSingleQuote && !inDoubleQuote {
+			// 检查 & 前后是否有空格或换行（确保是独立的 &，而不是变量名的一部分）
+			isStandalone := false
+
+			// 检查前面：空格、制表符、换行符，或者是命令开头
+			if i == 0 {
+				isStandalone = true
+			} else {
+				prev := command[i-1]
+				if prev == ' ' || prev == '\t' || prev == '\n' || prev == '\r' {
+					isStandalone = true
+				}
+			}
+
+			// 检查后面：空格、制表符、换行符，或者是命令末尾
+			if isStandalone {
+				if i == len(command)-1 {
+					// 在末尾，肯定是独立的 &
+					lastAmpersandPos = i
+				} else {
+					next := command[i+1]
+					if next == ' ' || next == '\t' || next == '\n' || next == '\r' {
+						// 后面有空格，是独立的 &
+						lastAmpersandPos = i
+					}
+				}
+			}
+		}
+	}
+
+	// 如果没有找到 & 符号，不是后台命令
+	if lastAmpersandPos == -1 {
+		return false
+	}
+
+	// 检查最后一个 & 后面是否还有非空内容
+	afterAmpersand := strings.TrimSpace(command[lastAmpersandPos+1:])
+	if afterAmpersand == "" {
+		// & 在末尾或后面只有空白字符，这是完全后台命令
+		// 检查 & 前面是否有内容
+		beforeAmpersand := strings.TrimSpace(command[:lastAmpersandPos])
+		return beforeAmpersand != ""
+	}
+
+	// 如果 & 后面还有非空内容，说明是 command1 & command2 的情况
+	// 这种情况下，command2会在前台执行，所以不算完全后台命令
+	return false
+}
+
 // executeSystemCommand 执行系统命令
 func (e *Executor) executeSystemCommand(ctx context.Context, args map[string]interface{}) (*mcp.ToolResult, error) {
 	// 获取命令
@@ -632,6 +717,9 @@ func (e *Executor) executeSystemCommand(ctx context.Context, args map[string]int
 		workDir = wd
 	}
 
+	// 检测是否为后台命令（包含 & 符号，但不在引号内）
+	isBackground := e.isBackgroundCommand(command)
+
 	// 构建命令
 	var cmd *exec.Cmd
 	if workDir != "" {
@@ -646,8 +734,134 @@ func (e *Executor) executeSystemCommand(ctx context.Context, args map[string]int
 		zap.String("command", command),
 		zap.String("shell", shell),
 		zap.String("workdir", workDir),
+		zap.Bool("isBackground", isBackground),
 	)
 
+	// 如果是后台命令，使用特殊处理来获取实际的后台进程PID
+	if isBackground {
+		// 移除命令末尾的 & 符号
+		commandWithoutAmpersand := strings.TrimSuffix(strings.TrimSpace(command), "&")
+		commandWithoutAmpersand = strings.TrimSpace(commandWithoutAmpersand)
+
+		// 构建新命令：command & pid=$!; echo $pid
+		// 使用变量保存PID，确保能获取到正确的后台进程PID
+		pidCommand := fmt.Sprintf("%s & pid=$!; echo $pid", commandWithoutAmpersand)
+
+		// 创建新命令来获取PID
+		var pidCmd *exec.Cmd
+		if workDir != "" {
+			pidCmd = exec.CommandContext(ctx, shell, "-c", pidCommand)
+			pidCmd.Dir = workDir
+		} else {
+			pidCmd = exec.CommandContext(ctx, shell, "-c", pidCommand)
+		}
+
+		// 获取stdout管道
+		stdout, err := pidCmd.StdoutPipe()
+		if err != nil {
+			e.logger.Error("创建stdout管道失败",
+				zap.String("command", command),
+				zap.Error(err),
+			)
+			// 如果创建管道失败，使用shell进程的PID作为fallback
+			if err := pidCmd.Start(); err != nil {
+				return &mcp.ToolResult{
+					Content: []mcp.Content{
+						{
+							Type: "text",
+							Text: fmt.Sprintf("后台命令启动失败: %v", err),
+						},
+					},
+					IsError: true,
+				}, nil
+			}
+			pid := pidCmd.Process.Pid
+			go pidCmd.Wait() // 在后台等待，避免僵尸进程
+			return &mcp.ToolResult{
+				Content: []mcp.Content{
+					{
+						Type: "text",
+						Text: fmt.Sprintf("后台命令已启动\n命令: %s\n进程ID: %d (可能不准确，获取PID失败)\n\n注意: 后台进程将继续运行，不会等待其完成。", command, pid),
+					},
+				},
+				IsError: false,
+			}, nil
+		}
+
+		// 启动命令
+		if err := pidCmd.Start(); err != nil {
+			stdout.Close()
+			e.logger.Error("后台命令启动失败",
+				zap.String("command", command),
+				zap.Error(err),
+			)
+			return &mcp.ToolResult{
+				Content: []mcp.Content{
+					{
+						Type: "text",
+						Text: fmt.Sprintf("后台命令启动失败: %v", err),
+					},
+				},
+				IsError: true,
+			}, nil
+		}
+
+		// 读取第一行输出（PID）
+		reader := bufio.NewReader(stdout)
+		pidLine, err := reader.ReadString('\n')
+		stdout.Close()
+
+		var actualPid int
+		if err != nil && err != io.EOF {
+			e.logger.Warn("读取后台进程PID失败",
+				zap.String("command", command),
+				zap.Error(err),
+			)
+			// 如果读取失败，使用shell进程的PID
+			actualPid = pidCmd.Process.Pid
+		} else {
+			// 解析PID
+			pidStr := strings.TrimSpace(pidLine)
+			if parsedPid, err := strconv.Atoi(pidStr); err == nil {
+				actualPid = parsedPid
+			} else {
+				e.logger.Warn("解析后台进程PID失败",
+					zap.String("command", command),
+					zap.String("pidLine", pidStr),
+					zap.Error(err),
+				)
+				// 如果解析失败，使用shell进程的PID
+				actualPid = pidCmd.Process.Pid
+			}
+		}
+
+		// 在goroutine中等待shell进程，避免僵尸进程
+		go func() {
+			if err := pidCmd.Wait(); err != nil {
+				e.logger.Debug("后台命令shell进程执行完成",
+					zap.String("command", command),
+					zap.Error(err),
+				)
+			}
+		}()
+
+		e.logger.Info("后台命令已启动",
+			zap.String("command", command),
+			zap.Int("actualPid", actualPid),
+		)
+
+		return &mcp.ToolResult{
+			Content: []mcp.Content{
+				{
+					Type: "text",
+					Text: fmt.Sprintf("后台命令已启动\n命令: %s\n进程ID: %d\n\n注意: 后台进程将继续运行，不会等待其完成。", command, actualPid),
+				},
+			},
+			IsError: false,
+		}, nil
+	}
+
+	// 非后台命令：等待输出
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		e.logger.Error("系统命令执行失败",
