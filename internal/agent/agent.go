@@ -1283,6 +1283,12 @@ func (a *Agent) UpdateConfig(cfg *config.OpenAIConfig) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.config = cfg
+
+	// 同时更新MemoryCompressor的配置（如果存在）
+	if a.memoryCompressor != nil {
+		a.memoryCompressor.UpdateConfig(cfg)
+	}
+
 	a.logger.Info("Agent配置已更新",
 		zap.String("base_url", cfg.BaseURL),
 		zap.String("model", cfg.Model),

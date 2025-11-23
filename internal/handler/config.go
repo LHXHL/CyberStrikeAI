@@ -22,14 +22,20 @@ import (
 
 // ConfigHandler 配置处理器
 type ConfigHandler struct {
-	configPath    string
-	config        *config.Config
-	mcpServer     *mcp.Server
-	executor      *security.Executor
-	agent         AgentUpdater // Agent接口，用于更新Agent配置
-	externalMCPMgr *mcp.ExternalMCPManager // 外部MCP管理器
-	logger        *zap.Logger
-	mu            sync.RWMutex
+	configPath      string
+	config          *config.Config
+	mcpServer       *mcp.Server
+	executor        *security.Executor
+	agent           AgentUpdater // Agent接口，用于更新Agent配置
+	attackChainHandler AttackChainUpdater // 攻击链处理器接口，用于更新配置
+	externalMCPMgr  *mcp.ExternalMCPManager // 外部MCP管理器
+	logger          *zap.Logger
+	mu              sync.RWMutex
+}
+
+// AttackChainUpdater 攻击链处理器更新接口
+type AttackChainUpdater interface {
+	UpdateConfig(cfg *config.OpenAIConfig)
 }
 
 // AgentUpdater Agent更新接口
@@ -39,15 +45,16 @@ type AgentUpdater interface {
 }
 
 // NewConfigHandler 创建新的配置处理器
-func NewConfigHandler(configPath string, cfg *config.Config, mcpServer *mcp.Server, executor *security.Executor, agent AgentUpdater, externalMCPMgr *mcp.ExternalMCPManager, logger *zap.Logger) *ConfigHandler {
+func NewConfigHandler(configPath string, cfg *config.Config, mcpServer *mcp.Server, executor *security.Executor, agent AgentUpdater, attackChainHandler AttackChainUpdater, externalMCPMgr *mcp.ExternalMCPManager, logger *zap.Logger) *ConfigHandler {
 	return &ConfigHandler{
-		configPath:     configPath,
-		config:         cfg,
-		mcpServer:      mcpServer,
-		executor:       executor,
-		agent:          agent,
-		externalMCPMgr: externalMCPMgr,
-		logger:         logger,
+		configPath:        configPath,
+		config:            cfg,
+		mcpServer:         mcpServer,
+		executor:          executor,
+		agent:             agent,
+		attackChainHandler: attackChainHandler,
+		externalMCPMgr:     externalMCPMgr,
+		logger:            logger,
 	}
 }
 
@@ -520,6 +527,12 @@ func (h *ConfigHandler) ApplyConfig(c *gin.Context) {
 		h.agent.UpdateConfig(&h.config.OpenAI)
 		h.agent.UpdateMaxIterations(h.config.Agent.MaxIterations)
 		h.logger.Info("Agent配置已更新")
+	}
+
+	// 更新AttackChainHandler的OpenAI配置
+	if h.attackChainHandler != nil {
+		h.attackChainHandler.UpdateConfig(&h.config.OpenAI)
+		h.logger.Info("AttackChainHandler配置已更新")
 	}
 
 	h.logger.Info("配置已应用",

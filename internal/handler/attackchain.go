@@ -19,6 +19,7 @@ type AttackChainHandler struct {
 	db           *database.DB
 	logger       *zap.Logger
 	openAIConfig *config.OpenAIConfig
+	mu           sync.RWMutex // 保护 openAIConfig 的并发访问
 	// 用于防止同一对话的并发生成
 	generatingLocks sync.Map // map[string]*sync.Mutex
 }
@@ -30,6 +31,24 @@ func NewAttackChainHandler(db *database.DB, openAIConfig *config.OpenAIConfig, l
 		logger:       logger,
 		openAIConfig: openAIConfig,
 	}
+}
+
+// UpdateConfig 更新OpenAI配置
+func (h *AttackChainHandler) UpdateConfig(cfg *config.OpenAIConfig) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.openAIConfig = cfg
+	h.logger.Info("AttackChainHandler配置已更新",
+		zap.String("base_url", cfg.BaseURL),
+		zap.String("model", cfg.Model),
+	)
+}
+
+// getOpenAIConfig 获取OpenAI配置（线程安全）
+func (h *AttackChainHandler) getOpenAIConfig() *config.OpenAIConfig {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.openAIConfig
 }
 
 // GetAttackChain 获取攻击链（按需生成）
@@ -50,7 +69,8 @@ func (h *AttackChainHandler) GetAttackChain(c *gin.Context) {
 	}
 
 	// 先尝试从数据库加载（如果已生成过）
-	builder := attackchain.NewBuilder(h.db, h.openAIConfig, h.logger)
+	openAIConfig := h.getOpenAIConfig()
+	builder := attackchain.NewBuilder(h.db, openAIConfig, h.logger)
 	chain, err := builder.LoadChainFromDatabase(conversationID)
 	if err == nil && len(chain.Nodes) > 0 {
 		// 如果已存在，直接返回
@@ -139,7 +159,8 @@ func (h *AttackChainHandler) RegenerateAttackChain(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	builder := attackchain.NewBuilder(h.db, h.openAIConfig, h.logger)
+	openAIConfig := h.getOpenAIConfig()
+	builder := attackchain.NewBuilder(h.db, openAIConfig, h.logger)
 	chain, err := builder.BuildChainFromConversation(ctx, conversationID)
 	if err != nil {
 		h.logger.Error("生成攻击链失败", zap.String("conversationId", conversationID), zap.Error(err))

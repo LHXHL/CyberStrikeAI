@@ -506,7 +506,7 @@ function initializeChatUI() {
 let messageCounter = 0;
 
 // 添加消息
-function addMessage(role, content, mcpExecutionIds = null, progressId = null) {
+function addMessage(role, content, mcpExecutionIds = null, progressId = null, createdAt = null) {
     const messagesDiv = document.getElementById('chat-messages');
     const messageDiv = document.createElement('div');
     messageCounter++;
@@ -582,7 +582,25 @@ function addMessage(role, content, mcpExecutionIds = null, progressId = null) {
     // 添加时间戳
     const timeDiv = document.createElement('div');
     timeDiv.className = 'message-time';
-    timeDiv.textContent = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    // 如果有传入的创建时间，使用它；否则使用当前时间
+    let messageTime;
+    if (createdAt) {
+        // 处理字符串或Date对象
+        if (typeof createdAt === 'string') {
+            messageTime = new Date(createdAt);
+        } else if (createdAt instanceof Date) {
+            messageTime = createdAt;
+        } else {
+            messageTime = new Date(createdAt);
+        }
+        // 如果解析失败，使用当前时间
+        if (isNaN(messageTime.getTime())) {
+            messageTime = new Date();
+        }
+    } else {
+        messageTime = new Date();
+    }
+    timeDiv.textContent = messageTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     contentWrapper.appendChild(timeDiv);
     
     // 如果有MCP执行ID或进度ID，添加查看详情区域（统一使用"渗透测试详情"样式）
@@ -1088,7 +1106,8 @@ async function loadConversation(conversationId) {
                     }
                 }
                 
-                const messageId = addMessage(msg.role, displayContent, msg.mcpExecutionIds || []);
+                // 传递消息的创建时间
+                const messageId = addMessage(msg.role, displayContent, msg.mcpExecutionIds || [], null, msg.createdAt);
                 // 如果有过程详情，显示它们
                 if (msg.processDetails && msg.processDetails.length > 0 && msg.role === 'assistant') {
                     // 延迟一下，确保消息已经渲染

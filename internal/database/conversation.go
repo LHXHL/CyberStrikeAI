@@ -74,15 +74,15 @@ func (db *DB) GetConversation(id string) (*Conversation, error) {
 		conv.CreatedAt, err1 = time.Parse("2006-01-02 15:04:05", createdAt)
 	}
 	if err1 != nil {
-		conv.CreatedAt, err1 = time.Parse(time.RFC3339, createdAt)
+		conv.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	}
-	
+
 	conv.UpdatedAt, err2 = time.Parse("2006-01-02 15:04:05.999999999-07:00", updatedAt)
 	if err2 != nil {
 		conv.UpdatedAt, err2 = time.Parse("2006-01-02 15:04:05", updatedAt)
 	}
 	if err2 != nil {
-		conv.UpdatedAt, err2 = time.Parse(time.RFC3339, updatedAt)
+		conv.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 	}
 
 	// 加载消息
@@ -155,17 +155,17 @@ func (db *DB) ListConversations(limit, offset int) ([]*Conversation, error) {
 			conv.CreatedAt, err1 = time.Parse("2006-01-02 15:04:05", createdAt)
 		}
 		if err1 != nil {
-			conv.CreatedAt, err1 = time.Parse(time.RFC3339, createdAt)
+			conv.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		}
-		
+
 		conv.UpdatedAt, err2 = time.Parse("2006-01-02 15:04:05.999999999-07:00", updatedAt)
 		if err2 != nil {
 			conv.UpdatedAt, err2 = time.Parse("2006-01-02 15:04:05", updatedAt)
 		}
 		if err2 != nil {
-			conv.UpdatedAt, err2 = time.Parse(time.RFC3339, updatedAt)
+			conv.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 		}
-		
+
 		conversations = append(conversations, &conv)
 	}
 
@@ -208,7 +208,7 @@ func (db *DB) DeleteConversation(id string) error {
 // AddMessage 添加消息
 func (db *DB) AddMessage(conversationID, role, content string, mcpExecutionIDs []string) (*Message, error) {
 	id := uuid.New().String()
-	
+
 	var mcpIDsJSON string
 	if len(mcpExecutionIDs) > 0 {
 		jsonData, err := json.Marshal(mcpExecutionIDs)
@@ -272,7 +272,7 @@ func (db *DB) GetMessages(conversationID string) ([]Message, error) {
 			msg.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 		}
 		if err != nil {
-			msg.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+			msg.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		}
 
 		// 解析MCP执行ID
@@ -290,19 +290,19 @@ func (db *DB) GetMessages(conversationID string) ([]Message, error) {
 
 // ProcessDetail 过程详情事件
 type ProcessDetail struct {
-	ID            string    `json:"id"`
-	MessageID     string    `json:"messageId"`
-	ConversationID string   `json:"conversationId"`
-	EventType     string    `json:"eventType"` // iteration, thinking, tool_calls_detected, tool_call, tool_result, progress, error
-	Message       string    `json:"message"`
-	Data          string    `json:"data"` // JSON格式的数据
-	CreatedAt     time.Time `json:"createdAt"`
+	ID             string    `json:"id"`
+	MessageID      string    `json:"messageId"`
+	ConversationID string    `json:"conversationId"`
+	EventType      string    `json:"eventType"` // iteration, thinking, tool_calls_detected, tool_call, tool_result, progress, error
+	Message        string    `json:"message"`
+	Data           string    `json:"data"` // JSON格式的数据
+	CreatedAt      time.Time `json:"createdAt"`
 }
 
 // AddProcessDetail 添加过程详情事件
 func (db *DB) AddProcessDetail(messageID, conversationID, eventType, message string, data interface{}) error {
 	id := uuid.New().String()
-	
+
 	var dataJSON string
 	if data != nil {
 		jsonData, err := json.Marshal(data)
@@ -351,7 +351,7 @@ func (db *DB) GetProcessDetails(messageID string) ([]ProcessDetail, error) {
 			detail.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 		}
 		if err != nil {
-			detail.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+			detail.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		}
 
 		details = append(details, detail)
@@ -387,7 +387,7 @@ func (db *DB) GetProcessDetailsByConversation(conversationID string) (map[string
 			detail.CreatedAt, err = time.Parse("2006-01-02 15:04:05", createdAt)
 		}
 		if err != nil {
-			detail.CreatedAt, err = time.Parse(time.RFC3339, createdAt)
+			detail.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		}
 
 		detailsMap[detail.MessageID] = append(detailsMap[detail.MessageID], detail)
@@ -395,4 +395,3 @@ func (db *DB) GetProcessDetailsByConversation(conversationID string) (map[string
 
 	return detailsMap, nil
 }
-
