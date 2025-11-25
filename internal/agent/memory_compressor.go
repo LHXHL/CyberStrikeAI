@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	DefaultMaxTotalTokens   = 100_000
+	DefaultMaxTotalTokens   = 120_000
 	DefaultMinRecentMessage = 10
 	defaultChunkSize        = 10
 	defaultMaxImages        = 3
